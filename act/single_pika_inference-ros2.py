@@ -729,26 +729,10 @@ class RosOperator(Node):
             encoder = None
 
         chunk_size = self.args.chunk_size
-        joint_state0_zero = [[0, 0, 0, 0, 0, 0, 0.08] for _ in range(len(self.args.arm_joint_state_ctrl_topics))]
-        joint_state1_zero = [[0, 0, 0, 0, 0, 0, 0.08] for _ in range(len(self.args.arm_joint_state_ctrl_topics))]
-
-        joint_state0 = [[0.0055820800000000005, 0.8687984200000001, 0.0, -0.015280944000000001, -0.028747712, -0.010169852, 0.08] for _ in range(len(self.args.arm_joint_state_ctrl_topics))]
         joint_state1 = [[0.0055820800000000005, 0.8687984200000001, 0.0, -0.015280944000000001, -0.028747712, -0.010169852, 0.08] for _ in range(len(self.args.arm_joint_state_ctrl_topics))]
-        end_pose0 = [[0.2408368057645897, 0.00287136069042693, -0.0009838999821004113, -0.024625887251749915, 0.7530362776143732, 0.006795072511917707, 0.08] for _ in range(len(self.args.arm_end_pose_ctrl_topics))]
         end_pose1 = [[0.2408368057645897, 0.00287136069042693, -0.0009838999821004113, -0.024625887251749915, 0.7530362776143732, 0.006795072511917707, 0.08] for _ in range(len(self.args.arm_end_pose_ctrl_topics))]
         robot_base_vel0 = [0, 0, 0]
         robot_base_vel1 = [0, 0, 0]
-        if self.args.use_arm_joint_state > 1:
-            self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0, True, calc_step=True)
-        if self.args.use_arm_end_pose > 1:
-            self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0_zero, True, calc_step=True)
-            # self.arm_joint_state_ctrl(joint_state0_zero)
-            rate_tmp = self.create_rate(1)
-            rate_tmp.sleep()
-            self.arm_end_pose_ctrl(end_pose0)
-            self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0, True, calc_step=True)
-            # self.arm_joint_state_ctrl(joint_state0)
-            # self.arm_end_pose_ctrl_linear_interpolation_thread(end_pose0, True, calc_step=True)
         if self.args.use_robot_base > 1:
             self.robot_base_vel_ctrl(robot_base_vel0)
         pre_inference_status = -1
@@ -776,21 +760,11 @@ class RosOperator(Node):
                     # print("inference_status:", inference_status, pre_inference_status)
                     if inference_status == -1:
                         if len(self.args.ckpt_dir) == 1:
-                            input("Please press any key to start inference:")
+                            input("Press Enter to start inference from the current pose: ")
+                            pre_inference_status = -1
                             self.set_inference_status(0)
                             continue
                         if pre_inference_status != inference_status:
-                            if self.args.use_arm_joint_state > 1:
-                                self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0, True, calc_step=True)
-                            if self.args.use_arm_end_pose > 1:
-                                self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0_zero, True, calc_step=True)
-                                # self.arm_joint_state_ctrl(joint_state0_zero)
-                                rate_tmp = self.create_rate(1)
-                                rate_tmp.sleep()
-                                self.arm_end_pose_ctrl(end_pose0)
-                                self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state0, True, calc_step=True)
-                                # self.arm_joint_state_ctrl(joint_state0)
-                                # self.arm_end_pose_ctrl_linear_interpolation_thread(end_pose0, True, calc_step=True)
                             if self.args.use_robot_base > 1:
                                 self.robot_base_vel_ctrl(robot_base_vel0)
                             pre_inference_status = inference_status
@@ -798,13 +772,14 @@ class RosOperator(Node):
                         break
                     else:
                         if pre_inference_status != inference_status:
-                            if self.args.use_arm_joint_state > 1:
-                                self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state1, True, calc_step=True)
                             if self.args.use_arm_end_pose > 1:
-                                self.arm_end_pose_ctrl(end_pose1)
-                                self.arm_joint_state_ctrl_linear_interpolation_thread(joint_state1, True, calc_step=True)
-                                # self.arm_joint_state_ctrl(joint_state1)
-                                # self.arm_end_pose_ctrl_linear_interpolation_thread(end_pose1, True, calc_step=True)
+                                start_poses = []
+                                for pose_queue in self.arm_end_pose_deques:
+                                    pose = pose_queue.right().pose
+                                    start_poses.append([pose.position.x, pose.position.y, pose.position.z,
+                                                        pose.orientation.x, pose.orientation.y, pose.orientation.z,
+                                                        pose.orientation.w])
+                                self.last_ctrl_arm_end_poses = [start_poses]
                             if self.args.use_robot_base > 1:
                                 self.robot_base_vel_ctrl(robot_base_vel1)
                             pre_inference_status = inference_status
